@@ -109,13 +109,31 @@ def style_fig(fig, title=""):
         paper_bgcolor=CHART_BG,
         plot_bgcolor=CHART_BG,
         font=dict(family="Inter", color=FONT_COLOR, size=12),
-        title=dict(text=title, font=dict(size=14, weight="bold", color="#1E293B")),
+        title=dict(
+            text=title,
+            y=0.99,                 # <-- move title upward
+            x=0.5,
+            xanchor="center",
+            yanchor="top",
+            font=dict(size=14, color="#1E293B")
+        ),
         margin=dict(l=10, r=10, t=42, b=10),
-        legend=dict(bgcolor="rgba(255,255,255,0.8)", bordercolor="#E2E8F0", borderwidth=1, font=dict(size=11)),
-        hoverlabel=dict(bgcolor="white", bordercolor="#E2E8F0", font=dict(size=12, color="#1E293B"))
+        legend=dict(
+            bgcolor="rgba(255,255,255,0.8)",
+            bordercolor="#E2E8F0",
+            borderwidth=1,
+            font=dict(size=11)
+        ),
+        hoverlabel=dict(
+            bgcolor="white",
+            bordercolor="#E2E8F0",
+            font=dict(size=12, color="#1E293B")
+        )
     )
+
     fig.update_xaxes(showgrid=False, zeroline=False, linecolor="#E2E8F0")
     fig.update_yaxes(showgrid=True, gridcolor="#F1F5F9", zeroline=False)
+
     return fig
 
 # ─────────────────────────────────────────────
