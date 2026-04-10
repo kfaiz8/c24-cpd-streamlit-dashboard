@@ -111,7 +111,7 @@ def style_fig(fig, title=""):
         font=dict(family="Inter", color=FONT_COLOR, size=12),
         title=dict(
             text=title,
-            y=0.99,                 # <-- move title upward
+            y=0.99,
             x=0.5,
             xanchor="center",
             yanchor="top",
@@ -130,10 +130,8 @@ def style_fig(fig, title=""):
             font=dict(size=12, color="#1E293B")
         )
     )
-
     fig.update_xaxes(showgrid=False, zeroline=False, linecolor="#E2E8F0")
     fig.update_yaxes(showgrid=True, gridcolor="#F1F5F9", zeroline=False)
-
     return fig
 
 # ─────────────────────────────────────────────
@@ -186,7 +184,6 @@ with st.sidebar:
 
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
-    # ── Ticket Sub-Category Filter (dynamic - updates after year/month/dealer/bucket) ──
     pre_filter = df[(df["YEAR"] == year) & (df["TICKET_RAISED_MONTH"] == month)].copy()
     if "ALL DEALERS" not in dealer_selection and len(dealer_selection) > 0:
         pre_filter = pre_filter[pre_filter["DEALER_CODE"].astype(str).isin(dealer_selection)]
@@ -203,7 +200,6 @@ with st.sidebar:
 
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
-    # ── Aggregation (drives ALL charts & KPIs) ──
     agg_function = st.selectbox(
         "📐 CPD Aggregation",
         ["Mean (AVG)", "Sum", "Median", "Min", "Max"],
@@ -219,9 +215,9 @@ with st.sidebar:
     show_subcat_deep  = st.toggle("Sub-Category Deep Dive",    value=True)
 
 # ─────────────────────────────────────────────
-# AGG HELPER  (used everywhere)
+# AGG HELPER
 # ─────────────────────────────────────────────
-AGG_KEY = agg_function.split(" ")[0]   # "Mean" | "Sum" | "Median" | "Min" | "Max"
+AGG_KEY = agg_function.split(" ")[0]
 
 AGG_MAP = {
     "Mean":   "mean",
@@ -243,7 +239,7 @@ def aggregate(series):
     return ops[AGG_KEY]
 
 # ─────────────────────────────────────────────
-# FILTER DATA  (all filters including sub-category)
+# FILTER DATA
 # ─────────────────────────────────────────────
 filtered_data = df[
     (df["YEAR"] == year) &
@@ -269,8 +265,6 @@ if filtered_data.empty:
     st.warning("⚠️ No data matches the current filters. Adjust the sidebar filters and try again.")
     st.stop()
 
-# For sub-category section we also need dealer-level aggregated view
-# (each dealer row deduplicated for CPD metrics, since tickets repeat per row)
 dealer_agg = (
     filtered_data.drop_duplicates(subset=["DEALER_CODE"])
     [["DEALER_CODE","BUCKET","TICKET_CNT","cpd_before","CPD","cpd_after","cpd_change",
@@ -278,14 +272,13 @@ dealer_agg = (
     .copy()
 )
 
-# Sub-category counts per dealer (all tickets in filtered view)
 subcat_counts = (
     filtered_data.groupby(["DEALER_CODE","TICKET_SUB_CATEGORY"])
     .size().reset_index(name="TICKET_COUNT")
 )
 
 # ─────────────────────────────────────────────
-# Active sub-category label for display
+# Active sub-category label
 # ─────────────────────────────────────────────
 if "ALL CATEGORIES" in sub_cat_selection or len(sub_cat_selection) == 0:
     active_subcat_label = "All Sub-Categories"
@@ -297,7 +290,6 @@ else:
 # ─────────────────────────────────────────────
 st.markdown('<div class="section-title">📌 Key Performance Indicators</div>', unsafe_allow_html=True)
 
-# KPIs based on dealer-level dedup (CPD metrics should not double-count)
 total_tickets    = int(filtered_data["TICKET_ID"].nunique())
 total_dealers    = filtered_data["DEALER_CODE"].nunique()
 unique_subcats   = filtered_data["TICKET_SUB_CATEGORY"].nunique()
@@ -387,7 +379,6 @@ PERIOD_LABELS = ["M-3","M-2","M-1","Ticket Month","M+1","M+2","M+3"]
 
 with col_left:
     values = [aggregate(dealer_agg[c] if c != "CPD" else dealer_agg["CPD"]) for c in PERIOD_COLS]
-
     point_colors = ["#3B82F6","#3B82F6","#3B82F6","#FF5200","#10B981","#10B981","#10B981"]
 
     fig_trend = go.Figure()
@@ -580,7 +571,6 @@ with col_t3:
 # ─────────────────────────────────────────────
 st.markdown('<div class="section-title">📅 Monthly Ticket Volume Trend (All Periods)</div>', unsafe_allow_html=True)
 
-# Apply sub-category filter to full dataset for trend consistency
 df_trend_base = df.copy()
 if "ALL CATEGORIES" not in sub_cat_selection and len(sub_cat_selection) > 0:
     df_trend_base = df_trend_base[df_trend_base["TICKET_SUB_CATEGORY"].isin(sub_cat_selection)]
@@ -629,17 +619,14 @@ if "ALL CATEGORIES" not in sub_cat_selection and len(sub_cat_selection) > 0:
         unsafe_allow_html=True
     )
 
-# ── SC-1: Volume + CPD Impact side by side ──────────────────────
 col_sc1, col_sc2 = st.columns(2)
 
 with col_sc1:
-    # Ticket volume by sub-category (bar)
     subcat_vol = (
         filtered_data.groupby("TICKET_SUB_CATEGORY")["TICKET_ID"]
         .nunique().reset_index(name="TICKET_COUNT")
         .sort_values("TICKET_COUNT", ascending=True)
     )
-    # Limit to top 15 for readability
     subcat_vol = subcat_vol.tail(15)
     subcat_vol["pct"] = subcat_vol["TICKET_COUNT"] / subcat_vol["TICKET_COUNT"].sum() * 100
 
@@ -664,8 +651,6 @@ with col_sc1:
     st.plotly_chart(fig_scvol, use_container_width=True)
 
 with col_sc2:
-    # CPD change by sub-category — join ticket sub-cat back to dealer CPD
-    # For each dealer, find their dominant sub-category by ticket count
     dealer_subcat_counts = (
         filtered_data.groupby(["DEALER_CODE","TICKET_SUB_CATEGORY"])
         .size().reset_index(name="cnt")
@@ -707,17 +692,14 @@ with col_sc2:
     fig_sccpd.update_yaxes(title_text="", tickfont=dict(size=10))
     st.plotly_chart(fig_sccpd, use_container_width=True)
 
-# ── SC-2: Sub-Category CPD Trend (line) + Before/After bar ──────
 st.markdown('<div class="section-title">📊 Sub-Category CPD Trend Across Ticket Window</div>', unsafe_allow_html=True)
 
 col_sc3, col_sc4 = st.columns([3,2])
 
 with col_sc3:
-    # For CPD period metrics, join sub-category using dealer primary mapping
     dealer_with_subcat2 = dealer_agg.merge(dealer_primary_subcat, on="DEALER_CODE", how="left")
     dealer_with_subcat2["TICKET_SUB_CATEGORY"] = dealer_with_subcat2["TICKET_SUB_CATEGORY"].fillna("Unknown")
 
-    # Pick top N sub-cats by ticket count for legibility
     top_subcats = (
         filtered_data.groupby("TICKET_SUB_CATEGORY")["TICKET_ID"]
         .nunique().nlargest(8).index.tolist()
@@ -759,7 +741,6 @@ with col_sc3:
     st.plotly_chart(fig_sctrend, use_container_width=True)
 
 with col_sc4:
-    # Before vs After grouped bar by sub-category
     sc_ba = dealer_with_subcat2[dealer_with_subcat2["TICKET_SUB_CATEGORY"].isin(top_subcats)]
     sc_ba_agg = sc_ba.groupby("TICKET_SUB_CATEGORY")[["cpd_before","cpd_after"]].agg(pandas_agg).reset_index()
     sc_ba_agg = sc_ba_agg.sort_values("cpd_after", ascending=False)
@@ -785,7 +766,6 @@ with col_sc4:
     fig_scba.update_xaxes(tickangle=-30, tickfont=dict(size=9))
     st.plotly_chart(fig_scba, use_container_width=True)
 
-# ── SC-3: Sub-Category × Bucket Heatmap ─────────────────────────
 st.markdown('<div class="section-title">🌡️ Sub-Category × Bucket — CPD Change Heatmap</div>', unsafe_allow_html=True)
 
 sc_bucket_df = dealer_with_subcat2[dealer_with_subcat2["TICKET_SUB_CATEGORY"].isin(top_subcats)]
@@ -810,61 +790,6 @@ fig_scheat.update_xaxes(title_text="Dealer Bucket", tickangle=-20)
 fig_scheat.update_yaxes(title_text="", tickfont=dict(size=10))
 st.plotly_chart(fig_scheat, use_container_width=True)
 
-# ── SC-4: Sub-Category Risk Table ───────────────────────────────
-# st.markdown('<div class="section-title">⚠️ Sub-Category Risk & Opportunity Summary</div>', unsafe_allow_html=True)
-
-# sc_summary = (
-#     filtered_data.groupby("TICKET_SUB_CATEGORY")
-#     .agg(
-#         Unique_Tickets=("TICKET_ID","nunique"),
-#         Affected_Dealers=("DEALER_CODE","nunique"),
-#     ).reset_index()
-# )
-# # Merge CPD metrics via dealer primary subcat
-# sc_cpd_metrics = (
-#     dealer_with_subcat2.groupby("TICKET_SUB_CATEGORY")
-#     .agg(
-#         Avg_CPD_Before=("cpd_before", "mean"),
-#         Avg_CPD_After=("cpd_after", "mean"),
-#         Avg_CPD_Change=("cpd_change", "mean"),
-#         Pct_Dealers_Improved=("cpd_change", lambda x: (x > 0).mean() * 100)
-#     ).reset_index()
-# )
-# sc_summary = sc_summary.merge(sc_cpd_metrics, on="TICKET_SUB_CATEGORY", how="left")
-# sc_summary = sc_summary.sort_values("Avg_CPD_Change", ascending=False)
-
-# def color_change(val):
-#     if pd.isna(val): return ""
-#     if val > 0:   return "background-color:#D1FAE5;color:#065F46;font-weight:600"
-#     if val < -1:  return "background-color:#FEE2E2;color:#991B1B;font-weight:600"
-#     return "background-color:#FEF3C7;color:#92400E;font-weight:600"
-
-# sc_display = sc_summary.rename(columns={
-#     "TICKET_SUB_CATEGORY": "Sub-Category",
-#     "Unique_Tickets": "Tickets",
-#     "Affected_Dealers": "Dealers",
-#     "Avg_CPD_Before": "Avg CPD Before",
-#     "Avg_CPD_After": "Avg CPD After",
-#     "Avg_CPD_Change": "Avg CPD Change",
-#     "Pct_Dealers_Improved": "% Dealers Improved"
-# }).round(2)
-
-# st.dataframe(
-#     sc_display.style
-#         .applymap(color_change, subset=["Avg CPD Change"])
-#         .format({
-#             "Tickets": "{:,}",
-#             "Dealers": "{:,}",
-#             "Avg CPD Before": "{:.2f}",
-#             "Avg CPD After": "{:.2f}",
-#             "Avg CPD Change": "{:+.2f}",
-#             "% Dealers Improved": "{:.1f}%"
-#         }),
-#     use_container_width=True,
-#     hide_index=True,
-#     height=min(40 + len(sc_display) * 35, 500)
-# )
-
 # ─────────────────────────────────────────────
 # OPTIONAL: Heatmap — Month × Bucket
 # ─────────────────────────────────────────────
@@ -872,7 +797,6 @@ if show_heatmap:
     st.markdown('<div class="section-title">🌡️ CPD Change Heatmap — Month × Bucket</div>', unsafe_allow_html=True)
 
     hmap_base = df_trend_base.copy()
-    # Deduplicate by dealer per month for CPD metrics
     hmap_dedup = hmap_base.drop_duplicates(subset=["YEAR","TICKET_RAISED_MONTH","DEALER_CODE"])
     hmap_df = (
         hmap_dedup.groupby(["TICKET_RAISED_MONTH","BUCKET"])["cpd_change"]
@@ -909,7 +833,6 @@ if show_subcat_deep:
     )
     sc_mom["YearMonth"] = sc_mom["TICKET_RAISED_MONTH"] + " " + sc_mom["YEAR"].astype(str)
 
-    # Pick top 6 sub-cats for MoM trend
     top6_sc = (
         filtered_data.groupby("TICKET_SUB_CATEGORY")["TICKET_ID"]
         .nunique().nlargest(6).index.tolist()
@@ -936,7 +859,6 @@ if show_subcat_deep:
 if show_dealer_drill:
     st.markdown('<div class="section-title">🔍 Dealer-Level Drill-Down</div>', unsafe_allow_html=True)
 
-    # Attach primary sub-category to dealer view
     drill_df = dealer_agg.merge(dealer_primary_subcat, on="DEALER_CODE", how="left")
     drill_df = (
         drill_df[["DEALER_CODE","BUCKET","TICKET_SUB_CATEGORY","TICKET_CNT",
@@ -948,21 +870,41 @@ if show_dealer_drill:
                         "CPD Before","CPD Ticket Month","CPD After","CPD Change"]
     drill_df = drill_df.round(2)
 
+    # ── CSS-only coloring for CPD Change — no matplotlib needed ──────────
+    def color_cpd_change(val):
+        """Return inline CSS style string based on CPD Change value."""
+        try:
+            v = float(val)
+        except (TypeError, ValueError):
+            return ""
+        if v > 0:
+            # Shade of green — stronger green for larger positive values
+            intensity = min(int(abs(v) / (drill_df["CPD Change"].abs().max() + 1e-9) * 180), 180)
+            bg = f"rgb({255 - intensity}, 255, {255 - intensity})"
+            return f"background-color: {bg}; color: #065F46; font-weight: 600"
+        elif v < 0:
+            intensity = min(int(abs(v) / (drill_df["CPD Change"].abs().max() + 1e-9) * 180), 180)
+            bg = f"rgb(255, {255 - intensity}, {255 - intensity})"
+            return f"background-color: {bg}; color: #991B1B; font-weight: 600"
+        return ""
+
     top_n = st.slider("Show Top / Bottom N Dealers", 5, 50, 15)
     tab_top, tab_bot, tab_search = st.tabs(["🏆 Top Improvers","⚠️ Bottom Performers","🔎 Search Dealer"])
 
     with tab_top:
+        top_df = drill_df.head(top_n)
         st.dataframe(
-            drill_df.head(top_n).style
-                .background_gradient(subset=["CPD Change"], cmap="Greens")
+            top_df.style
+                .map(color_cpd_change, subset=["CPD Change"])
                 .format({"Tickets": "{:,.0f}"}),
             use_container_width=True, hide_index=True
         )
 
     with tab_bot:
+        bot_df = drill_df.tail(top_n).sort_values("CPD Change")
         st.dataframe(
-            drill_df.tail(top_n).sort_values("CPD Change").style
-                .background_gradient(subset=["CPD Change"], cmap="Reds_r")
+            bot_df.style
+                .map(color_cpd_change, subset=["CPD Change"])
                 .format({"Tickets": "{:,.0f}"}),
             use_container_width=True, hide_index=True
         )
@@ -972,7 +914,12 @@ if show_dealer_drill:
         if search_code:
             result = drill_df[drill_df["Dealer Code"].astype(str).str.contains(search_code)]
             if not result.empty:
-                st.dataframe(result, use_container_width=True, hide_index=True)
+                st.dataframe(
+                    result.style
+                        .map(color_cpd_change, subset=["CPD Change"])
+                        .format({"Tickets": "{:,.0f}"}),
+                    use_container_width=True, hide_index=True
+                )
                 matched = dealer_agg[
                     dealer_agg["DEALER_CODE"].astype(str).str.contains(search_code)
                 ]
@@ -988,7 +935,6 @@ if show_dealer_drill:
                     fig_spark.update_layout(height=260)
                     st.plotly_chart(fig_spark, use_container_width=True)
 
-                    # Also show sub-categories for this dealer
                     dealer_sc = filtered_data[
                         filtered_data["DEALER_CODE"].astype(str).str.contains(search_code)
                     ][["TICKET_ID","TICKET_SUB_CATEGORY"]].drop_duplicates()
